@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TechGuard | School Safety</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
+<body>
+{% if auth_mode %}
+  <main class="auth-shell">
+    <section class="auth-card">
+      <div class="brand auth-brand"><span class="brand-mark">TG</span><div><strong>TECHGUARD</strong><small>School Safety Operations</small></div></div>
+      <p class="eyebrow">STAFF ACCESS</p>
+      <h1>{{ 'Create your account' if auth_mode == 'signup' else 'Welcome back' }}</h1>
+      <p class="muted">{{ 'Register the first administrator or create a staff account.' if auth_mode == 'signup' else 'Sign in to view cameras, locations and incident alerts.' }}</p>
+      {% with messages = get_flashed_messages(with_categories=true) %}{% for category,message in messages %}<div class="flash {{ category }}">{{ message }}</div>{% endfor %}{% endwith %}
+      <form method="post" action="{{ url_for('signup_post' if auth_mode == 'signup' else 'login_post') }}" class="auth-form">
+        <label>Username<input name="username" autocomplete="username" minlength="3" maxlength="40" required></label>
+        <label>Password<input type="password" name="password" autocomplete="{{ 'new-password' if auth_mode == 'signup' else 'current-password' }}" minlength="{{ 10 if auth_mode == 'signup' else 1 }}" required></label>
+        {% if auth_mode == 'signup' %}<label>Confirm password<input type="password" name="confirm_password" autocomplete="new-password" minlength="10" required></label>{% endif %}
+        <button class="primary full" type="submit">{{ 'Create account' if auth_mode == 'signup' else 'Sign in' }}</button>
+      </form>
+      <p class="auth-switch">{% if auth_mode == 'signup' %}Already registered? <a href="{{ url_for('login') }}">Sign in</a>{% else %}New to TechGuard? <a href="{{ url_for('signup') }}">Create an account</a>{% endif %}</p>
+      <p class="tiny">Prototype access only. Use a unique password and only authorised school staff should access real camera footage.</p>
+    </section>
+  </main>
+{% else %}
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">TG</span><div><strong>TECHGUARD</strong><small>School Safety Operations</small></div></div>
+    <div class="header-right"><div class="top-status"><span class="dot"></span><span id="topStatus">CONNECTING</span></div><div class="user-chip">{{ username }} · {{ role }}</div><form method="post" action="{{ url_for('logout') }}"><button class="secondary compact" type="submit">Sign out</button></form></div>
+  </header>
+  <main>
+    <section class="welcome"><div><p class="eyebrow">SECURITY OPERATIONS</p><h1>School safety dashboard</h1><p class="muted">Review camera status, locate alerts and coordinate staff response.</p></div><div class="pill">HUMAN REVIEW REQUIRED</div></section>
+    <section class="metrics">
+      <article class="metric"><span>Registered cameras</span><strong id="cameraCount">—</strong><small>Configured locations</small></article>
+      <article class="metric"><span>Open incidents</span><strong id="openIncidents">—</strong><small>Require staff review</small></article>
+      <article class="metric"><span>People detected</span><strong id="people">—</strong><small>YOLOv8 person detections</small></article>
+      <article class="metric"><span>System status</span><strong id="status" class="status-ready">READY</strong><small id="source">No source selected</small></article>
+    </section>
+    <section class="layout">
+      <article class="panel camera-panel">
+        <div class="panel-heading"><div><p class="eyebrow">LIVE MONITORING</p><h2>Camera preview / test video</h2></div><span id="feedBadge" class="badge">OFFLINE</span></div>
+        <div class="selected-location" id="selectedLocation">Select a registered camera below.</div>
+        <div class="feed"><img id="cameraFeed" alt="Live processed camera feed" src="/video-feed"><div id="feedPlaceholder"><span class="camera-icon">◉</span><strong>Camera feed is offline</strong><small>On Render, a browser-based laptop camera is not directly accessible to the server. Use a supported network camera source or upload a test video.</small></div></div>
+        <div class="controls"><button id="startCamera" class="primary">Start selected camera</button><label class="file-button" for="videoFile">Choose test video</label><input id="videoFile" type="file" accept=".mp4,.avi,.mov,.mkv,video/*"><button id="startVideo" class="secondary">Run AI on video</button><button id="stop" class="danger" disabled>Stop</button></div>
+        <p class="hint">A camera record stores its location; it does not automatically connect physical CCTV. Each live camera needs a reachable, authorised video source. Never expose camera credentials in the browser.</p>
+      </article>
+      <aside class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">AI PIPELINE</p><h2>Model status</h2></div></div>
+        <div class="model-row"><span class="model-icon">YO</span><div><strong>YOLOv8</strong><small>Person detection</small></div><span class="model-state">SERVER</span></div>
+        <div class="model-row"><span class="model-icon">R18</span><div><strong>ResNet18</strong><small>Violence classification</small></div><span class="model-state">SERVER</span></div>
+        <div class="notice"><strong>Review before response</strong><p>AI flags are screening signals, not proof of violence or misconduct. A trained staff member should verify an alert before acting.</p></div>
+        <div class="panel-heading activity-heading"><div><p class="eyebrow">EVENT HISTORY</p><h2>Recent activity</h2></div></div><div id="events" class="events"><p class="muted">Waiting for backend events…</p></div>
+      </aside>
+    </section>
+    <section class="panel">
+      <div class="panel-heading"><div><p class="eyebrow">CAMERA DIRECTORY</p><h2>Camera locations</h2></div><span class="badge neutral">LOCATION FIRST</span></div>
+      <p class="muted">Register each camera with a unique code and a location staff can find quickly. Demo camera entries are placeholders until a real source is configured.</p>
+      <form id="cameraForm" class="camera-form">
+        <input name="camera_code" placeholder="Camera code e.g. CAM-04" maxlength="24" required>
+        <input name="name" placeholder="Camera name" maxlength="100" required>
+        <input name="building" placeholder="Building / block" maxlength="100" required>
+        <input name="floor" placeholder="Floor" maxlength="30" required>
+        <input name="room" placeholder="Room / area" maxlength="100" required>
+        <input name="details" placeholder="Directions / landmark (optional)" maxlength="200">
+        <input name="source_index" type="number" min="0" max="99" value="0" title="Local camera device index for demo">
+        <button class="primary" type="submit">Add camera</button>
+      </form>
+      <div class="table-wrap"><table><thead><tr><th>Code</th><th>Camera</th><th>Location</th><th>Directions</th><th>Action</th></tr></thead><tbody id="cameraRows"><tr><td colspan="5" class="muted">Loading cameras…</td></tr></tbody></table></div>
+    </section>
+    <section class="panel visitor-panel">
+      <div class="panel-heading"><div><p class="eyebrow">INCIDENT RESPONSE</p><h2>Alert queue</h2></div><span class="badge neutral">STAFF WORKFLOW</span></div>
+      <p class="muted">Acknowledge an alert when a staff member takes responsibility. Mark it resolved only after checking the situation on site.</p>
+      <div class="table-wrap"><table><thead><tr><th>Time</th><th>Camera</th><th>Location</th><th>Alert</th><th>Status</th><th>Assigned / resolved by</th><th>Action</th></tr></thead><tbody id="incidentRows"><tr><td colspan="7" class="muted">No incidents recorded.</td></tr></tbody></table></div>
+    </section>
+    <footer>TechGuard prototype · Camera locations and incidents are stored in SQLite. For production, use persistent storage, HTTPS, access controls, retention policies and school approval.</footer>
+  </main>
+  <script>window.TG_USER = {{ username|tojson }};</script><script src="{{ url_for('static', filename='script.js') }}"></script>
+{% endif %}
+</body></html>
